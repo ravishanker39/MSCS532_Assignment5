@@ -73,6 +73,7 @@ def main():
     parser.add_argument("--output", type=Path, default=Path("benchmark_run"))
     args = parser.parse_args()
     args.output.mkdir(parents=True, exist_ok=True)
+    # Give each pivot policy one untimed sort before collecting its timings.
     for policy in POLICIES:
         data = make_input(256, "random", SEED)
         run_sort(policy, data, random.Random(SEED))
@@ -87,10 +88,14 @@ def main():
                 pivot_seed = data_seed + 1_000_000
                 data = make_input(size, shape, data_seed)
                 expected = sorted(data)
+                # Alternate which policy runs first across successive trials.
                 order = POLICIES if (trial + index) % 2 == 0 else POLICIES[::-1]
                 for policy in order:
+                    # Each sort changes its input. A fresh copy gives both
+                    # policies the same starting order, including on shuffled data.
                     values = data.copy()
                     rng = random.Random(pivot_seed)
+                    # Time just the sort. Check the result after stopping the clock.
                     start = time.perf_counter_ns()
                     run_sort(policy, values, rng)
                     duration = time.perf_counter_ns() - start
@@ -107,7 +112,8 @@ def main():
                                       median_ms=statistics.median(times) / 1e6,
                                       min_ms=min(times) / 1e6, max_ms=max(times) / 1e6,
                                       first_trial_key_comparisons=0))
-    # Delay instrumented runs until the timing experiment is complete.
+    # Replay trial 1 with the same data and pivot seeds. Counting comparisons
+    # separately keeps the counter updates out of the measured sort times.
     for row in summaries:
         first_seed = SEED + row["size"] * 1000 + SHAPES.index(row["shape"]) * 20
         data = make_input(row["size"], row["shape"], first_seed)
