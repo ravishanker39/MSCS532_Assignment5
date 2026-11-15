@@ -21,6 +21,8 @@ SEED = 53205
 def make_input(size, shape, seed):
     rng = random.Random(seed)
     if shape == "eight_keys":
+        # Drawing from 0 through 7 keeps the number of different keys small
+        # even as the list grows. This exercises the partition's tie handling.
         return [rng.randrange(8) for _ in range(size)]
     if shape == "all_equal":
         return [7] * size
@@ -57,6 +59,7 @@ class CountedKey:
 
 def count_keys(policy, data, pivot_seed):
     wrapped = [CountedKey(value) for value in data]
+    # Every wrapped key shares this counter. Reset it for this one sort.
     CountedKey.comparisons = 0
     run_sort(policy, wrapped, random.Random(pivot_seed))
     # Check the unwrapped integers so validation adds nothing to the count.
@@ -85,6 +88,8 @@ def main():
     rows, summaries = [], []
     for size in SIZES:
         for index, shape in enumerate(SHAPES):
+            # Start fresh for each size and shape. Each policy will collect
+            # seven durations here before its median is calculated.
             elapsed = {policy: [] for policy in POLICIES}
             first_seed = SEED + size * 1000 + index * 20
             for trial in range(TRIALS):
@@ -93,6 +98,8 @@ def main():
                 # shuffled list can be replayed with a different pivot sequence.
                 pivot_seed = data_seed + 1_000_000
                 data = make_input(size, shape, data_seed)
+                # Build one reference answer for the pair. Comparing the
+                # whole list later also catches a dropped or duplicated key.
                 expected = sorted(data)
                 # Alternate which policy runs first across successive trials.
                 order = POLICIES if (trial + index) % 2 == 0 else POLICIES[::-1]
@@ -108,12 +115,16 @@ def main():
                     if values != expected:
                         raise AssertionError((shape, size, policy, trial))
                     elapsed[policy].append(duration)
+                    # Keep the raw time and seeds together so this trial can
+                    # be repeated. The last-pivot policy makes no random draws.
                     rows.append(dict(size=size, shape=shape, trial=trial + 1,
                                      pivot=policy, data_seed=data_seed,
                                      pivot_seed=pivot_seed if policy == "random" else "",
                                      elapsed_ns=duration))
             for policy in POLICIES:
                 times = elapsed[policy]
+                # Report the middle of the seven timings in milliseconds.
+                # The minimum and maximum show how far the other runs varied.
                 summaries.append(dict(size=size, shape=shape, pivot=policy,
                                       median_ms=statistics.median(times) / 1e6,
                                       min_ms=min(times) / 1e6, max_ms=max(times) / 1e6,
@@ -125,8 +136,12 @@ def main():
         data = make_input(row["size"], row["shape"], first_seed)
         row["first_trial_key_comparisons"] = count_keys(row["pivot"], data, first_seed + 1_000_000)
 
+    # Each trials.csv row is one timed sort. Each summary.csv row combines
+    # seven timings with the comparison count from the first trial's replay.
     write_csv(args.output / "trials.csv", rows)
     write_csv(args.output / "summary.csv", summaries)
+    # Record the machine alongside the results. Some systems return only an
+    # architecture label here; on Linux the model name can be more specific.
     cpu = platform.processor() or platform.machine()
     cpu_info = Path("/proc/cpuinfo")
     if cpu_info.is_file():
