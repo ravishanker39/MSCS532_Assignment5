@@ -1,0 +1,10 @@
+{
+  "python": "3.12.14",
+  "implementation": "CPython",
+  "system": "Linux",
+  "architecture": "x86_64",
+  "cpu": "AMD EPYC 9V74 80-Core Processor",
+  "clock": "perf_counter_ns",
+  "trials_per_cell": 7,
+  "base_seed": 53205
+}
