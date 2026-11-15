@@ -10,32 +10,32 @@ T = TypeVar("T")
 def _partition(values: list[T], low: int, high: int, pivot_index: int) -> tuple[int, int]:
     """Return the inclusive bounds of the group equal to the chosen pivot."""
     pivot = values[pivot_index]
-    # Keep the pivot at high. Both scans stop just before that slot.
+    # Set the pivot aside at high so neither scan moves it. In the report's
+    # example, [4, 1, 3, 2, 5, 3], the last 3 is already in that slot.
     values[pivot_index], values[high] = values[high], values[pivot_index]
 
-    # Trace [4, 1, 3, 2, 5, 3] with the last 3 as pivot. The first scan
-    # moves 1 and 2 forward, leaving [1, 2, 3, 4, 5, 3] and first_equal = 2.
+    # first_equal marks the next slot for a key smaller than the pivot.
     first_equal = low
     for index in range(low, high):
         if values[index] < pivot:
-            # Put this smaller key in the next open slot, then extend the prefix.
+            # In the example, 1 swaps with 4. Later, 2 swaps with that same
+            # 4 in its new slot. The list is now [1, 2, 3, 4, 5, 3].
             values[first_equal], values[index] = values[index], values[first_equal]
             first_equal += 1
 
-    # The remaining keys are all at least the pivot. A key that is also
-    # no greater than the pivot is a tie and belongs beside the smaller keys.
+    # Start the second scan where the smaller keys end. Every remaining
+    # key is at least the pivot, so if pivot < key is false, the keys tie.
     last_equal = first_equal
     for index in range(first_equal, high):
         if not pivot < values[index]:
-            # The block from first_equal up to (but excluding) last_equal
-            # holds the ties found so far. This swap extends it by one.
+            # The other 3 is already at index 2. It swaps with itself,
+            # but last_equal still advances to 3 to record that tie.
             values[last_equal], values[index] = values[index], values[last_equal]
             last_equal += 1
-    # last_equal now points just past the gathered ties. Fill that slot with
-    # the saved pivot so the returned bounds include every copy of its key.
+    # Place the saved pivot just after the ties. Here it swaps with 4 at
+    # index 3, leaving [1, 2, 3, 3, 5, 4].
     values[last_equal], values[high] = values[high], values[last_equal]
-    # In the trace, the final swap gives [1, 2, 3, 3, 5, 4]. Returning (2, 3)
-    # leaves [1, 2] and [5, 4] as the two ranges still to process.
+    # Both bounds are inclusive. Returning (2, 3) lets the caller skip both 3s.
     return first_equal, last_equal
 
 
@@ -48,18 +48,20 @@ def _sort(values: list[T], low: int, high: int, rng: Random | None) -> None:
         # lets randrange choose that slot too, since its stop is exclusive.
         pivot_index = high if rng is None else rng.randrange(low, high + 1)
         first_equal, last_equal = _partition(values, low, high, pivot_index)
-        # Skip the equal block. Only the shorter side needs a new call frame,
-        # so each nested call handles at most half its parent's range.
+        # Compare the lengths on either side of the ties. The recursive
+        # call takes at most half the range. The loop handles the rest.
         if first_equal - low < high - last_equal:
             if low + 1 < first_equal:
                 _sort(values, low, first_equal - 1, rng)
             # The left side is sorted. Continue the loop on the right side.
             low = last_equal + 1
         else:
-            # Equal side lengths take this branch. In the trace above, sort
-            # [5, 4] in the recursive call, then resume this frame on [1, 2].
+            # The example has two keys on each side, so this branch runs.
+            # On the right, pivot 4 turns [5, 4] into [4, 5].
             if last_equal + 1 < high:
                 _sort(values, last_equal + 1, high, rng)
+            # Resume on the left. In [1, 2], 1 is already below pivot 2,
+            # so this final partition leaves the list [1, 2, 3, 3, 4, 5].
             high = first_equal - 1
 
 
