@@ -29,6 +29,8 @@ class QuicksortTests(unittest.TestCase):
                 self.check_both(list(keys))
 
     def test_ordered_above_typical_recursion_limit(self):
+        # The last pivot produces extreme splits here. A recursive call on
+        # the large side each time would exhaust a typical Python call stack.
         self.check_both(list(range(1500)))
         self.check_both(list(range(1500, 0, -1)))
 
@@ -51,6 +53,8 @@ class QuicksortTests(unittest.TestCase):
             original = values.copy()
             pivot = original[pivot_index]
             first, last = _partition(values, 1, 6, pivot_index)
+            # Check the untouched outer slots first, then verify that the six
+            # inner keys survived and fall into the smaller, equal and larger groups.
             self.assertEqual((values[0], values[-1]), (99, -99))
             self.assertCountEqual(values[1:7], original[1:7])
             self.assertTrue(all(x < pivot for x in values[1:first]))
@@ -69,6 +73,8 @@ class QuicksortTests(unittest.TestCase):
                 return choice
 
         traces = []
+        # Sorted output alone cannot show which pivots were chosen. Compare
+        # the recorded draws from two identical seeds and one different seed.
         for seed in (19, 19, 20):
             rng = TracedRandom(seed)
             values = list(range(64))

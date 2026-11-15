@@ -24,6 +24,7 @@ def make_input(size, shape, seed):
         return [rng.randrange(8) for _ in range(size)]
     if shape == "all_equal":
         return [7] * size
+    # These three cases use the same distinct keys. Only their order changes.
     values = list(range(size))
     if shape == "random":
         rng.shuffle(values)
@@ -48,6 +49,8 @@ class CountedKey:
         self.value = value
 
     def __lt__(self, other):
+        # Both partition scans use <, so this counts comparisons in either
+        # direction, including the comparison that identifies a tie.
         CountedKey.comparisons += 1
         return self.value < other.value
 
@@ -56,6 +59,7 @@ def count_keys(policy, data, pivot_seed):
     wrapped = [CountedKey(value) for value in data]
     CountedKey.comparisons = 0
     run_sort(policy, wrapped, random.Random(pivot_seed))
+    # Check the unwrapped integers so validation adds nothing to the count.
     if [key.value for key in wrapped] != sorted(data):
         raise AssertionError("counted run did not sort the input")
     return CountedKey.comparisons
@@ -85,6 +89,8 @@ def main():
             first_seed = SEED + size * 1000 + index * 20
             for trial in range(TRIALS):
                 data_seed = first_seed + trial
+                # Separate the pivot draws from input generation so the same
+                # shuffled list can be replayed with a different pivot sequence.
                 pivot_seed = data_seed + 1_000_000
                 data = make_input(size, shape, data_seed)
                 expected = sorted(data)

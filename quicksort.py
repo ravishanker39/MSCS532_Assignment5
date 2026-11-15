@@ -13,7 +13,8 @@ def _partition(values: list[T], low: int, high: int, pivot_index: int) -> tuple[
     # Keep the pivot at high. Both scans stop just before that slot.
     values[pivot_index], values[high] = values[high], values[pivot_index]
 
-    # Within this range, everything before first_equal is smaller than the pivot.
+    # Trace [4, 1, 3, 2, 5, 3] with the last 3 as pivot. The first scan
+    # moves 1 and 2 forward, leaving [1, 2, 3, 4, 5, 3] and first_equal = 2.
     first_equal = low
     for index in range(low, high):
         if values[index] < pivot:
@@ -26,16 +27,22 @@ def _partition(values: list[T], low: int, high: int, pivot_index: int) -> tuple[
     last_equal = first_equal
     for index in range(first_equal, high):
         if not pivot < values[index]:
+            # The block from first_equal up to (but excluding) last_equal
+            # holds the ties found so far. This swap extends it by one.
             values[last_equal], values[index] = values[index], values[last_equal]
             last_equal += 1
     # last_equal now points just past the gathered ties. Fill that slot with
     # the saved pivot so the returned bounds include every copy of its key.
     values[last_equal], values[high] = values[high], values[last_equal]
+    # In the trace, the final swap gives [1, 2, 3, 3, 5, 4]. Returning (2, 3)
+    # leaves [1, 2] and [5, 4] as the two ranges still to process.
     return first_equal, last_equal
 
 
 def _sort(values: list[T], low: int, high: int, rng: Random | None) -> None:
     """Recurse on the smaller strict side and handle the larger side in this frame."""
+    # An empty or one-key range needs no partition. This also stops the loop
+    # when a partition of identical keys consumes the entire active range.
     while low < high:
         # The fixed rule uses the last slot. For a random pivot, high + 1
         # lets randrange choose that slot too, since its stop is exclusive.
@@ -49,9 +56,10 @@ def _sort(values: list[T], low: int, high: int, rng: Random | None) -> None:
             # The left side is sorted. Continue the loop on the right side.
             low = last_equal + 1
         else:
+            # Equal side lengths take this branch. In the trace above, sort
+            # [5, 4] in the recursive call, then resume this frame on [1, 2].
             if last_equal + 1 < high:
                 _sort(values, last_equal + 1, high, rng)
-            # The right side is sorted. Continue on the left, even for a tie in size.
             high = first_equal - 1
 
 
@@ -62,6 +70,8 @@ def deterministic_quicksort(values: list[T]) -> None:
 
 def randomized_quicksort(values: list[T], rng: Random | None = None) -> None:
     """Sort in place using uniform pivot indices. Pass a seeded generator to replay."""
+    # Pass one generator through the whole sort so successive partitions
+    # advance the same sequence of pivot draws.
     generator = Random() if rng is None else rng
     _sort(values, 0, len(values) - 1, generator)
 
